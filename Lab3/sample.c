@@ -2,27 +2,73 @@
 #include <mpi.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 #define PRECISION 0.000001
-#define RANGESIZE 1
+#define RANGESIZE 5
 #define DATA 0
 #define RESULT 1
 #define FINISH 2
+#define TWINOFFSET 2
+#define INITIAL_ARRAY_SIZE 1000000
+#define MAX_LINE_LENGTH 16
 
 //#define DEBUG
 
-double
-f (double x)
+unsigned long* read_csv_to_int_array(char* filename, int* count);
+void mergeSort(unsigned long arr[], int l, int r);
+
+int
+f (unsigned long x)
 {
-    return sin (x) * sin (x) / x;
+	if(x<2 || x%2==0)
+		return 0;
+	if(x==2||x==3)
+		return 1;
+	
+    for(unsigned long i=sqrt(x); i>1;i--){
+		if(x%i==0)
+			return 0;
+	}
 }
 
-double
-SimpleIntegration (double a, double b)
+
+
+
+int
+SimpleIntegration (int a, int b,unsigned long* arr)
 {
-    double i;
-    double sum = 0;
-    for (i = a; i < b; i += PRECISION)
-	sum += f (i) * PRECISION;
+    
+	int i=a;
+    int sum = 0;
+	int offset=0;
+
+	int potentialTwin=0;
+    while (i<=b)
+	{
+		//printf("%ld",i);
+		if(potentialTwin){
+			if(!f(arr[i])){
+				if(offset>=TWINOFFSET){
+					offset=0;
+					potentialTwin=0;
+				}else
+					offset++;
+			}else{
+				if(offset==TWINOFFSET-1)
+					sum++;
+				offset=0;
+				
+			}
+		}
+
+		if(!potentialTwin&&f(arr[i]))
+			potentialTwin=1;
+			
+		i++;
+		
+		
+	}
+	
     return sum;
 }
 
