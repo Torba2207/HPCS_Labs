@@ -16,6 +16,7 @@
 
 unsigned long* read_csv_to_int_array(char* filename, int* count);
 void mergeSort(unsigned long arr[], int l, int r);
+int removeDuplicates(unsigned long arr[], int size);
 
 int
 f (unsigned long x)
@@ -84,6 +85,7 @@ main (int argc, char **argv)
 	unsigned long* array = read_csv_to_int_array(argv[1], &count);
 	int arraySize = count;
 	mergeSort(array, 0, arraySize - 1);
+	arraySize = removeDuplicates(array, arraySize);  // Remove duplicates after sorting
     double a = 0, b = arraySize - 1;
     double *ranges;
     double range[2];
@@ -486,4 +488,18 @@ void mergeSort(unsigned long arr[], int l, int r){
 
         merge(arr, l, m, r);
     }
+}
+
+int removeDuplicates(unsigned long arr[], int size) {
+    if (size <= 1)
+        return size;
+
+    int j = 0;  // Index for unique elements
+    for (int i = 1; i < size; i++) {
+        if (arr[i] != arr[j]) {
+            j++;
+            arr[j] = arr[i];
+        }
+    }
+    return j + 1;  // New size without duplicates
 }
