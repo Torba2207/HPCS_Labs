@@ -4,19 +4,24 @@
 #include <stdlib.h>
 #include <string.h>
 #define PRECISION 0.000001
-#define RANGESIZE 10000
+#define RANGESIZE 1000
 #define DATA 0
 #define RESULT 1
 #define FINISH 2
 #define TWINOFFSET 2
 #define INITIAL_ARRAY_SIZE 1000000
-#define MAX_LINE_LENGTH 16
+#define MAX_LINE_LENGTH 32
 
 //#define DEBUG
 
 unsigned long* read_csv_to_int_array(char* filename, int* count);
 void mergeSort(unsigned long arr[], int l, int r);
 int removeDuplicates(unsigned long arr[], int size);
+void write_csv_from_array(char* filename, unsigned long* arr, int size);
+
+int comp(const void *a, const void *b) {
+    return (*(int *)a - *(int *)b);
+}
 
 int
 f (unsigned long x)
@@ -57,7 +62,6 @@ SimpleIntegration (int a, int b,unsigned long* arr, int size)
     return sum;
 }
 
-
 int
 main (int argc, char **argv)
 {
@@ -68,8 +72,11 @@ main (int argc, char **argv)
 	int count=0;
 	unsigned long* array = read_csv_to_int_array(argv[1], &count);
 	int arraySize = count;
-	mergeSort(array, 0, arraySize - 1);
-	arraySize = removeDuplicates(array, arraySize);  // Remove duplicates after sorting
+	//mergeSort(array, 0, arraySize - 1);
+    qsort(array,arraySize,sizeof(unsigned long), comp);
+	//write_csv_from_array("sorted_output.csv", array, arraySize);  // Write sorted array to CSV
+    arraySize = removeDuplicates(array, arraySize);  // Remove duplicates after sorting
+    //write_csv_from_array("sorted_dedup_output.csv", array, arraySize);  // Write sorted deduplicated array to CSV
     double a = 0, b = arraySize - 1;
     double *ranges;
     double range[2];
@@ -144,6 +151,7 @@ main (int argc, char **argv)
 	    fflush (stdout);
 #endif
 	    // send it to process i
+        //range[1]=range[1]+1>b?b:range[1]++;
 	    MPI_Send (range, 2, MPI_DOUBLE, i, DATA, MPI_COMM_WORLD);
 	    sentcount++;
 	    range[0] = range[1];
@@ -169,7 +177,7 @@ main (int argc, char **argv)
 #endif
 	    ranges[2 * i - 2] = range[0];
 	    ranges[2 * i - 1] = range[1];
-
+        //range[1]=range[1]+1>b?b:range[1]++;
 	    // send it to process i
 	    MPI_Isend (&(ranges[2 * i - 2]), 2, MPI_DOUBLE, i, DATA,
  			    MPI_COMM_WORLD, &(requests[proccount - 2 + i]));
@@ -323,7 +331,7 @@ main (int argc, char **argv)
  			    &(requests[0]));
 
 	    // compute my part
-            resulttemp[1] = SimpleIntegration (range[0], range[1], array,arraySize);
+            resulttemp[1] = SimpleIntegration (range[0], range[1], array, arraySize);
 #ifdef DEBUG
 	    printf ("\nSlave just computed range %f,%f", range[0],
     			    range[1]);
@@ -367,6 +375,7 @@ main (int argc, char **argv)
 	free(array);
 }
 
+// Modified version for CSV format with index,value columns and header row
 unsigned long* read_csv_to_int_array(char* filename, int* count) {
     FILE* file = fopen(filename, "r"); // Open the file in read mode
     if (file == NULL) {
@@ -385,28 +394,44 @@ unsigned long* read_csv_to_int_array(char* filename, int* count) {
     *count = 0;
 
     char line[MAX_LINE_LENGTH];
+    
+    // Skip header line
+    if (fgets(line, MAX_LINE_LENGTH, file) == NULL) {
+        perror("Error reading header or empty file");
+        free(numbers);
+        fclose(file);
+        exit(EXIT_FAILURE);
+    }
+
     while (fgets(line, MAX_LINE_LENGTH, file) != NULL) { // Read each line
         // Remove potential newline character
         line[strcspn(line, "\n")] = 0;
+        
+        // Find comma separator
+        char* comma = strchr(line, ',');
+        if (comma == NULL || comma[1] == '\0') {
+            // Skip lines without proper comma separation
+            continue;
+        }
+        
+        // Extract value from second column (after comma)
+        unsigned long num = atoll(comma + 1);
 
-		// Convert string token to integer
-		unsigned long num = atoll(line);
+        // Check if array needs resizing
+        if (*count >= capacity) {
+            capacity *= 2;
+            unsigned long* temp = (unsigned long*)realloc(numbers, capacity * sizeof(unsigned long));
+            if (temp == NULL) {
+                perror("Memory re-allocation failed");
+                free(numbers);
+                fclose(file);
+                exit(EXIT_FAILURE);
+            }
+            numbers = temp;
+        }
 
-		// Check if array needs resizing
-		if (*count >= capacity) {
-			capacity *= 2;
-			unsigned long* temp = (unsigned long*)realloc(numbers, capacity * sizeof(unsigned long));
-			if (temp == NULL) {
-				perror("Memory re-allocation failed");
-				free(numbers);
-				fclose(file);
-				exit(EXIT_FAILURE);
-			}
-			numbers = temp;
-		}
-
-		numbers[*count] = num;
-		(*count)++;
+        numbers[*count] = num;
+        (*count)++;
     }
 
     fclose(file); // Close the file
@@ -486,4 +511,23 @@ int removeDuplicates(unsigned long arr[], int size) {
         }
     }
     return j + 1;  // New size without duplicates
+}
+
+void write_csv_from_array(char* filename, unsigned long* arr, int size) {
+    FILE* file = fopen(filename, "w");
+    if (file == NULL) {
+        perror("Error opening file for writing");
+        return;
+    }
+
+    // Write header
+    fprintf(file, "index,value\n");
+
+    // Write data
+    for (int i = 0; i < size; i++) {
+        fprintf(file, "%d,%lu\n", i, arr[i]);
+    }
+
+    fclose(file);
+    printf("Sorted array written to %s with %d elements\n", filename, size);
 }
